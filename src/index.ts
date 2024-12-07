@@ -1,14 +1,10 @@
 import express from 'express'
+import connectDb from './db'
+import { app } from './app'
 
-const app = express()
-const port = 3000
-
-app.listen(port, ()=>{
-  console.log("Server is running ")
-})
-
-app.get("/" , (req , res)=>{
-  res.status(200).json({
-    message: "Going good"
+connectDb()
+.then(()=>{
+  app.listen(process.env.PORT || 4000, ()=>{
+    console.log("Server is running ")
   })
 })
