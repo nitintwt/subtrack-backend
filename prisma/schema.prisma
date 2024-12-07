@@ -15,7 +15,9 @@ model User {
   email String @unique
   name String
   subscriptions Subscription []
-  tokens String
+  tokens String?
+  password String
+  refreshToken String? 
 }
 
 model Subscription {
