@@ -4,7 +4,7 @@ import { prisma } from "../db";
 import { ApiResponse } from "../utils/ApiResponse";
 import { ApiError } from "../utils/ApiError";
 import { Request, Response } from "express";
-import PdfParse from 'pdf-parse'
+import PdfParse from "pdf-parse";
 
 
 // generated a endpoint for the google oauth2 and redirect user to it for authentication
@@ -138,10 +138,15 @@ const getEmails = asyncHandler (async (req:Request , res:Response)=>{
               });
 
               const attachmentData:any = attachmentResponse.data.data;
-
+              
+              // converting base64 data into binary 
               const pdfBuffer = Buffer.from(attachmentData , "base64")
+
+              // now binary data into text
               const pdfText = await PdfParse(pdfBuffer)
 
+              //console.log("text" , pdfText)
+            
               return {
                 filename: attachment.filename,
                 mimeType: attachment.mimeType,
