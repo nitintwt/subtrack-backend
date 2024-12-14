@@ -5,6 +5,8 @@ import { ApiResponse } from "../utils/ApiResponse";
 import { ApiError } from "../utils/ApiError";
 import { Request, Response } from "express";
 import PdfParse from "pdf-parse";
+import {HfInference} from "@huggingface/inference"
+
 
 
 // generated a endpoint for the google oauth2 and redirect user to it for authentication
@@ -100,6 +102,7 @@ const getEmails = asyncHandler (async (req:Request , res:Response)=>{
       .toString()
       .padStart(2, "0")}/${oneYearAgo.getDate().toString().padStart(2, "0")}`;
     
+    // we are fetching last one year emails
     const searchQuery = `subject:receipt OR subject:invoice after:${formattedDate}`;
     const listResponse = await gmail.users.messages.list({
       userId: "me",   // the authorized user
@@ -111,7 +114,7 @@ const getEmails = asyncHandler (async (req:Request , res:Response)=>{
     if (!emails || emails.length === 0) {
       return res.status(200).json({ message: "No emails found with the given subject." });
     }
-    console.log("EMAIL" , emails)
+    //console.log("EMAIL" , emails)
 
     // Fetch attachments for each message
     const emailAttachments = await Promise.all(
@@ -143,28 +146,38 @@ const getEmails = asyncHandler (async (req:Request , res:Response)=>{
               const pdfBuffer = Buffer.from(attachmentData , "base64")
 
               // now binary data into text
-              const pdfText = await PdfParse(pdfBuffer)
-
-              //console.log("text" , pdfText)
-            
+              const pdfText = await PdfParse(pdfBuffer)            
               return {
-                filename: attachment.filename,
-                mimeType: attachment.mimeType,
-                data: attachmentData,
                 pdfText:pdfText
               };
             })
         );
-
         return {
-          messageId: email.id,
-          threadId: email.threadId,
           attachments: attachments.filter(Boolean), // Only include non-null attachments
         };
       })
+    )
+    
+    // converting nested array pdf text into plain array to pass to ai model
+    const allTexts = emailAttachments.flatMap((email) => email.attachments).map((attachment) => attachment.pdfText.text);
+    const combinedText = allTexts.join("\n\n"); // Combine all extracted text with a separator
+
+    // passing the extracted subscription data to ai model , to get desired output
+    const client = new HfInference(process.env.HUGGING_API_KEY)
+    const subscriptionsData = await client.chatCompletion({
+      model: "mistralai/Mixtral-8x7B-Instruct-v0.1",
+      messages: [
+        { role: "system", content: "You are an AI assistant tasked with extracting subscription details from text. For each entry, extract the following information:\n\nService Name: The name of the service or subscription.\nAmount: The billing amount (e.g., $20.99).\nRenewal Date: The next payment or renewal date.\nFrequency: Determine the frequency of the subscription:\nIf the same service name appears every month, label it as \"monthly.\"\nIf the service appears less frequently, label it as \"yearly.\"\nFor other patterns (e.g., every 3 months), label the frequency accordingly.\nRules:\n\nOnly include unique service entries:\nDo not include services with the same name more than once in the same month.\nTo determine the frequency, analyze all occurrences of the same service name and calculate how often they appear across the data." },
+        { role: "user", content: combinedText }
+      ],
+      temperature: 0.5,
+      max_tokens: 5000,
+      top_p: 0.7
+    })
+
+    return res.status(200).json(
+      new ApiResponse(200 , subscriptionsData , "Subscriptions Data fetched successfully")
     );
-    console.log("emailattach" , emailAttachments)
-    return res.status(200).json({ emailAttachments });
   } catch (error:any){
     throw new ApiError (500 ,  error)
   }
@@ -200,3 +213,5 @@ const getUserDetails = asyncHandler (async (req:Request , res:Response)=>{
 })
 
 export {googleAuth , googleLogin , getEmails , getUserDetails}
+
+// mistralai/Mixtral-8x7B-Instruct-v0.1
