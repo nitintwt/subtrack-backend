@@ -106,4 +106,32 @@ const loginUser = asyncHandler(async(req:Request , res:Response)=>{
   .json( new ApiResponse(200 ,user ,"User logged in successfully"))
 })
 
-export {registerUser , loginUser}
+const logoutUser = asyncHandler(async(req:Request , res:Response)=>{
+  const userId = req.body.userId
+  try {
+    await prisma.user.update({
+      where:{
+        id:userId,
+      },
+      data:{
+        refreshToken:null
+      }
+    })
+    const options ={
+      httpOnly:false,
+      secure:true
+    }
+    return res
+    .status(200)
+    .clearCookie("accessToken", options)
+    .clearCookie("RefreshToken", options)
+    .clearCookie("userData")
+    .json(
+      new ApiResponse(200 , "User logged out successfully")
+    )
+  } catch (error:any) {
+    throw new ApiError(500 , "Something went wrong" , error)
+  }
+})
+
+export {registerUser , loginUser, logoutUser}

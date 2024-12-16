@@ -68,7 +68,7 @@ const googleLogin = asyncHandler(async (req:Request , res:Response)=>{
   Then this binary form will be passed to pdf-parser which will convert it into text
 */
 
-const getEmails = asyncHandler (async (req:Request , res:Response)=>{
+const getSubscriptionsData = asyncHandler (async (req:Request , res:Response)=>{
   const userId = req.query.userId as string
 
   const user = await prisma.user.findFirst({
@@ -167,7 +167,7 @@ const getEmails = asyncHandler (async (req:Request , res:Response)=>{
     const subscriptionsData = await client.chatCompletion({
       model: "mistralai/Mixtral-8x7B-Instruct-v0.1",
       messages: [
-        { role: "system", content: "You are an AI assistant tasked with extracting subscription details from text. For each entry, extract the following information:\n\nService Name: The name of the service or subscription.\nAmount: The billing amount (e.g., $20.99).\nRenewal Date: The next payment or renewal date.\nFrequency: Determine the frequency of the subscription:\nIf the same service name appears every month, label it as \"monthly.\"\nIf the service appears less frequently, label it as \"yearly.\"\nFor other patterns (e.g., every 3 months), label the frequency accordingly.\nRules:\n\nOnly include unique service entries:\nDo not include services with the same name more than once in the same month.\nTo determine the frequency, analyze all occurrences of the same service name and calculate how often they appear across the data." },
+        { role: "system", content: "You are an AI assistant tasked with extracting subscription details from text. For each entry, extract the following information:\\n\\nService Name: The name of the service or subscription.\\nAmount: The billing amount (e.g., $20.99).\\nRenewal Date: The next payment or renewal date.\\nFrequency: Determine the frequency of the subscription:\\nIf the same service name appears every month, label it as \\\"monthly.\\\"\\nIf the service appears less frequently, label it as \\\"yearly.\\\"\\nFor other patterns (e.g., every 3 months), label the frequency accordingly.\\nRules:\\n\\nOnly include unique service entries:\\nDo not include services with the same name more than once in the same month.\\nTo determine the frequency, analyze all occurrences of the same service name and calculate how often they appear across the data.\nOutput Format:\n      [\n        {\n          \"subscription_name\": \"<name>\",\n          \"amount\": \"<amount>\",\n          \"renewal_date\": \"<date>\",\n          \"frequency\": \"<frequency>\"\n        }\n      ]" },
         { role: "user", content: combinedText }
       ],
       temperature: 0.5,
@@ -212,6 +212,6 @@ const getUserDetails = asyncHandler (async (req:Request , res:Response)=>{
   }
 })
 
-export {googleAuth , googleLogin , getEmails , getUserDetails}
+export {googleAuth , googleLogin , getSubscriptionsData , getUserDetails}
 
 // mistralai/Mixtral-8x7B-Instruct-v0.1
