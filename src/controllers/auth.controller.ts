@@ -5,6 +5,18 @@ import { asyncHandler } from "../utils/asyncHandler";
 import { Request, Response } from "express";
 import bcrypt from 'bcrypt'
 import jwt from 'jsonwebtoken'
+import { z } from "zod";
+
+const signupSchema = z.object({
+  name:z.string(),
+  email: z.string().email(),
+  password: z.string().min(8)
+})
+
+const loginSchema = z.object({
+  email:z.string().email(),
+  password: z.string().min(8)
+})
 
 const generateAccessAndRefreshToken = async (userId:string , email:string , name:string)=>{
   try {
@@ -35,75 +47,100 @@ const generateAccessAndRefreshToken = async (userId:string , email:string , name
   }
 }
 
-const registerUser = asyncHandler (async (req:Request , res:Response)=>{
-  const {name , email , password}:{name:string , email:string , password:string} = req.body
-
-  const existedUser = await prisma.user.findFirst({
-    where:{
-      email:email
-    }
-  })
-  if(existedUser){
-    return res.status(409).json(
-      new ApiResponse(409 , "User with email exists")
-    )
-  }
-
-  const hashedPassword = await bcrypt.hash(password, 10)
+const registerUser = asyncHandler(async (req: Request, res: Response) => {
   try {
-    const user = await prisma.user.create({
-      data:{
-        name:name,
-        email:email,
-        password:hashedPassword
+    const { name, email, password } = signupSchema.parse(req.body)
+
+    const existedUser = await prisma.user.findFirst({
+      where: {
+        email: email,
       }
     })
-    return res.status(200).json(
-      new ApiResponse(200 , user , "Registered successfully")
+
+    if (existedUser) {
+      return res.status(409).json(
+        new ApiResponse(409, "User with this email already exists.")
+      )
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 10)
+
+    const user = await prisma.user.create({
+      data: {
+        name,
+        email,
+        password: hashedPassword,
+      },
+    })
+
+    return res.status(201).json(
+      new ApiResponse(201, "User registered successfully.")
     )
-  } catch (error:any) {
-    throw new ApiError(500 , "Something went wrong registering the user" , error)
+  } catch (error: any) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json(new ApiResponse(400, error.errors, "Validation error"))
+    }
+    console.error("Error registering user:", error)
+    throw new ApiError(500, "Something went wrong registering the user.", error)
   }
 })
 
-const loginUser = asyncHandler(async(req:Request , res:Response)=>{
-  const {email , password}:{email:string  , password:string}= req.body
-  const user = await prisma.user.findFirst({
-    where:{
-      email:email,
-    }
-  })
-  if(!user){
-    return res.status(404).json(
-      new ApiResponse(404 , "Invalid Email")
-    )
-  }
-  const isPasswordCorrect = await bcrypt.compare(password , user.password)
-  if (!isPasswordCorrect){
-    return res.status(401).json(
-      new ApiResponse(401 , "Incorrect Password")
-    )
-  }
-  const {accessToken, refreshToken} = await generateAccessAndRefreshToken(user.id , email , user.name)
-  await prisma.user.update({
-    where:{
-      id:user.id
-    },
-    data:{
-      refreshToken: refreshToken
-    }
-  })
+const loginUser = asyncHandler(async (req: Request, res: Response) => {
+  try {
+    const { email, password } = loginSchema.parse(req.body)
 
-  const options = {
-    httpOnly : true,
-    secure: true,
-  }
+    const user = await prisma.user.findFirst({
+      where: {
+        email: email,
+      },
+    });
 
-  return res.
-  status(200)
-  .cookie("acessToken", accessToken , options)
-  .cookie("refreshToken" , refreshToken , options)
-  .json( new ApiResponse(200 ,user ,"User logged in successfully"))
+    if (!user) {
+      return res.status(404).json(
+        new ApiResponse(404, null, "User with this email does not exist")
+      )
+    }
+
+    const isPasswordCorrect = await bcrypt.compare(password, user.password)
+
+    if (!isPasswordCorrect) {
+      return res.status(401).json(
+        new ApiResponse(401, null, "Incorrect password.")
+      )
+    }
+
+    const { accessToken, refreshToken } = await generateAccessAndRefreshToken(
+      user.id,
+      email,
+      user.name
+    )
+
+    await prisma.user.update({
+      where: {
+        id: user.id,
+      },
+      data: {
+        refreshToken: refreshToken,
+      }
+    })
+
+    const options = {
+      httpOnly: true,
+      secure: true,
+    };
+
+    return res
+      .status(200)
+      .cookie("accessToken", accessToken, options)
+      .cookie("refreshToken", refreshToken, options)
+      .json(new ApiResponse(200, user, "User logged in successfully."))
+  } catch (error: any) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json(new ApiResponse(400, error.errors, "Validation error."))
+    }
+    console.error("Error logging in user:", error)
+    throw new ApiError(500, "Something went wrong logging in the user.", error)
+  }
 })
 
 const logoutUser = asyncHandler(async(req:Request , res:Response)=>{
