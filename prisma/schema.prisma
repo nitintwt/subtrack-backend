@@ -25,7 +25,7 @@ model Subscription {
   authorId String    //  field that references the id field in the User model.
   author User @relation(fields: [authorId], references: [id])    // field specifies that authorId is used to establish the relation and refrence points to the id field of the User model
   service String
-  charge Int
+  amount String
   frequency String
   renewalDate String
 }

@@ -167,16 +167,38 @@ const getSubscriptionsData = asyncHandler (async (req:Request , res:Response)=>{
     const subscriptionsData = await client.chatCompletion({
       model: "mistralai/Mixtral-8x7B-Instruct-v0.1",
       messages: [
-        { role: "system", content: "You are an AI assistant tasked with extracting subscription details from text. For each entry, extract the following information:\\n\\nService Name: The name of the service or subscription.\\nAmount: The billing amount (e.g., $20.99).\\nRenewal Date: The next payment or renewal date.\\nFrequency: Determine the frequency of the subscription:\\nIf the same service name appears every month, label it as \\\"monthly.\\\"\\nIf the service appears less frequently, label it as \\\"yearly.\\\"\\nFor other patterns (e.g., every 3 months), label the frequency accordingly.\\nRules:\\n\\nOnly include unique service entries:\\nDo not include services with the same name more than once in the same month.\\nTo determine the frequency, analyze all occurrences of the same service name and calculate how often they appear across the data.\nOutput Format:\n      [\n        {\n          \"subscription_name\": \"<name>\",\n          \"amount\": \"<amount>\",\n          \"renewal_date\": \"<date>\",\n          \"frequency\": \"<frequency>\"\n        }\n      ]" },
+        { role: "system", content: "You are an AI assistant tasked with extracting subscription details from text. For each entry, extract the following information:\\n\\nservice: The name of the service or subscription.\\namount: The billing amount (e.g., $20.99).\\nrenewalDate: The next payment or renewal date.\\nfrequency: Determine the frequency of the subscription:\\nIf the same service name appears every month, label it as \\\"monthly.\\\"\\nIf the service appears less frequently, label it as \\\"yearly.\\\"\\nFor other patterns (e.g., every 3 months), label the frequency accordingly.\\nRules:\\n\\nOnly include unique service entries:\\nDo not include services with the same name more than once in the same month.\\nTo determine the frequency, analyze all occurrences of the same service name and calculate how often they appear across the data.\nOutput Format:\n      [\n        {\n          \"service\": \"<name>\",\n          \"amount\": \"<amount>\",\n          \"renewalDate\": \"<date>\",\n          \"frequency\": \"<frequency>\"\n        }\n      ]. \\n You will give me just the output I need , no extra text attached." },
         { role: "user", content: combinedText }
       ],
       temperature: 0.5,
       max_tokens: 5000,
       top_p: 0.7
     })
+    console.log(subscriptionsData.choices[0].message.content)
+    const subscriptionsArray = JSON.parse(subscriptionsData.choices[0].message.content!);
+
+    // delete previous subscriptions
+    await prisma.subscription.deleteMany({
+      where:{
+        authorId: userId
+      }
+    })
+
+    // saving in db
+    await Promise.all(
+      subscriptionsArray!.map(async (subscription:any)=> await prisma.subscription.create({
+        data:{
+          service:subscription.subscription_name,
+          amount: subscription.amount,
+          frequency:subscription.frequency,
+          renewalDate:subscription.renewal_date,
+          authorId:userId
+        }
+      }))
+    )
 
     return res.status(200).json(
-      new ApiResponse(200 , subscriptionsData , "Subscriptions Data fetched successfully")
+      new ApiResponse(200 , subscriptionsData?.choices[0]?.message?.content , "Subscriptions Data fetched successfully")
     );
   } catch (error:any){
     throw new ApiError (500 ,  error)
@@ -195,7 +217,10 @@ const getUserDetails = asyncHandler (async (req:Request , res:Response)=>{
     const user = await prisma.user.findFirst({
       where:{
         id:userId
-      }
+      },
+      include: { 
+        subscriptions: true 
+      },
     })
     if (!user) {
       return res.status(404).json(
@@ -212,6 +237,24 @@ const getUserDetails = asyncHandler (async (req:Request , res:Response)=>{
   }
 })
 
-export {googleAuth , googleLogin , getSubscriptionsData , getUserDetails}
+const deleteSubscription = asyncHandler (async (req:Request , res:Response)=>{
+  const {userId , subscriptionId} = req.query as {userId:string , subscriptionId:string}
+
+  try {
+    await prisma.subscription.delete({
+      where:{
+        authorId:userId,
+        id:subscriptionId
+      }
+    })
+    return res.status(200).json(
+      new ApiResponse(200 , "Subscription deleted successfully")
+    )
+  } catch (error:any) {
+    throw new ApiError(500 , "Something went wrong " , error)
+  }
+})
+
+export {googleAuth , googleLogin , getSubscriptionsData , getUserDetails , deleteSubscription}
 
 // mistralai/Mixtral-8x7B-Instruct-v0.1

@@ -5,7 +5,7 @@
   "main": "index.ts",
   "type": "module",
   "scripts": {
-    "start": "tsc -b && tsx src/index.ts",
+    "start": "tsc -p . && tsx src/index.ts",
     "dev": "nodemon --exec tsx src/index.ts",
     "postinstall": "patch-package"
   },
@@ -14,7 +14,7 @@
   "dependencies": {
     "@google-cloud/local-auth": "^2.1.0",
     "@huggingface/inference": "^2.8.1",
-    "@prisma/client": "^6.0.1",
+    "@prisma/client": "^6.1.0",
     "axios": "^1.7.9",
     "bcrypt": "^5.1.1",
     "cookie-parser": "^1.4.7",
@@ -35,7 +35,7 @@
     "@types/node": "^22.10.1",
     "@types/pdf-parse": "^1.1.4",
     "nodemon": "^3.1.7",
-    "prisma": "^6.0.1",
+    "prisma": "^6.1.0",
     "ts-node": "^10.9.2",
     "tsx": "^4.19.2",
     "typescript": "^5.7.2"
