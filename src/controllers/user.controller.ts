@@ -6,8 +6,12 @@ import { ApiError } from "../utils/ApiError";
 import { Request, Response } from "express";
 import PdfParse from "pdf-parse";
 import {HfInference} from "@huggingface/inference"
+import { z } from "zod";
 
-
+const uuidSchema = z.object({
+  userId: z.string().uuid(),
+  subscriptionId: z.string().uuid().optional()
+})
 
 // generated a endpoint for the google oauth2 and redirect user to it for authentication
 const googleAuth = asyncHandler (async (req:Request , res:Response)=>{
@@ -29,7 +33,7 @@ const googleAuth = asyncHandler (async (req:Request , res:Response)=>{
 
 const googleLogin = asyncHandler(async (req:Request , res:Response)=>{
   const code = req.query.code as string
-  const userId= req.body.userId as string
+  const {userId} = uuidSchema.parse({userId:req.body.userId})
 
   const oauth2Client = new google.auth.OAuth2(
    process.env.CLIENT_ID,
@@ -69,7 +73,7 @@ const googleLogin = asyncHandler(async (req:Request , res:Response)=>{
 */
 
 const getSubscriptionsData = asyncHandler (async (req:Request , res:Response)=>{
-  const userId = req.query.userId as string
+  const {userId} = uuidSchema.parse({userId:req.query.userId})
 
   const user = await prisma.user.findFirst({
     where:{
@@ -149,14 +153,15 @@ const getSubscriptionsData = asyncHandler (async (req:Request , res:Response)=>{
               const pdfText = await PdfParse(pdfBuffer)            
               return {
                 pdfText:pdfText
-              };
+              }
             })
-        );
+        )
         return {
           attachments: attachments.filter(Boolean), // Only include non-null attachments
-        };
+        } 
       })
     )
+    console.log("email attachments" , emailAttachments)
     
     // converting nested array pdf text into plain array to pass to ai model
     const allTexts = emailAttachments.flatMap((email) => email.attachments).map((attachment) => attachment.pdfText.text);
@@ -188,10 +193,10 @@ const getSubscriptionsData = asyncHandler (async (req:Request , res:Response)=>{
     await Promise.all(
       subscriptionsArray!.map(async (subscription:any)=> await prisma.subscription.create({
         data:{
-          service:subscription.subscription_name,
+          service:subscription.service,
           amount: subscription.amount,
           frequency:subscription.frequency,
-          renewalDate:subscription.renewal_date,
+          renewalDate:subscription.renewalDate,
           authorId:userId
         }
       }))
@@ -206,7 +211,7 @@ const getSubscriptionsData = asyncHandler (async (req:Request , res:Response)=>{
 })
 
 const getUserDetails = asyncHandler (async (req:Request , res:Response)=>{
-  const userId = req.query.userId as string
+  const {userId} = uuidSchema.parse({userId:req.query.userId})
 
   if (!userId) {
     return res.status(400).json(
@@ -238,7 +243,7 @@ const getUserDetails = asyncHandler (async (req:Request , res:Response)=>{
 })
 
 const deleteSubscription = asyncHandler (async (req:Request , res:Response)=>{
-  const {userId , subscriptionId} = req.query as {userId:string , subscriptionId:string}
+  const {userId , subscriptionId} = uuidSchema.parse({userId: req.query.userId , subscriptionId:req.query.subscriptionId})
 
   try {
     await prisma.subscription.delete({
