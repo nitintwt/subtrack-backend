@@ -27,5 +27,7 @@ model Subscription {
   service String
   amount String
   frequency String
-  renewalDate String
+  lastRenewalDate String?
+  isNotification Boolean @default(false)
+  @@index([authorId])
 }

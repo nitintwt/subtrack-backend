@@ -5,8 +5,8 @@ import { ApiResponse } from "../utils/ApiResponse";
 import { ApiError } from "../utils/ApiError";
 import { Request, Response } from "express";
 import PdfParse from "pdf-parse";
-import {HfInference} from "@huggingface/inference"
 import { z } from "zod";
+import { extractSubscriptionDetails } from "../services/ai.service";
 
 const uuidSchema = z.object({
   userId: z.string().uuid(),
@@ -62,17 +62,7 @@ const googleLogin = asyncHandler(async (req:Request , res:Response)=>{
   }
 })
 
-/*
- The pdf which we get from the gmail api will in base64 form.
- Base64 is way text based way to represent binary data.
- for example: Binary:01001000 01100101 01101100 01101100 01101111 
-              Base64: SGVsbG8=
-  gmail response  the pdf in base64 format.
-  First we will convert this base64 back to binary form using nodejs buffer.
-  Then this binary form will be passed to pdf-parser which will convert it into text
-*/
-
-const getSubscriptionsData = asyncHandler (async (req:Request , res:Response)=>{
+const getSubscriptions = asyncHandler (async (req:Request , res:Response)=>{
   const {userId} = uuidSchema.parse({userId:req.query.userId})
 
   const user = await prisma.user.findFirst({
@@ -91,7 +81,7 @@ const getSubscriptionsData = asyncHandler (async (req:Request , res:Response)=>{
     process.env.CLIENT_ID,
     process.env.CLIENT_SECRET,
     process.env.REDIRECT_URL
-  );
+  )
 
   oauth2Client.setCredentials(tokens)
 
@@ -116,12 +106,36 @@ const getSubscriptionsData = asyncHandler (async (req:Request , res:Response)=>{
     const emails = listResponse.data.messages;
 
     if (!emails || emails.length === 0) {
-      return res.status(200).json({ message: "No emails found with the given subject." });
+      return res.status(200).json({ message: "No emails found" });
     }
-    //console.log("EMAIL" , emails)
+    console.log("EMAIL" , emails)
 
-    // Fetch attachments for each message
+    /*
+    The above "emails" is an array of email ids which has invoice or receipt in there subject.
+    we want to extract text of each email's attachment.
+    
+    So , the steps we do are :-
+
+    1. We will map the emails array and for each email , we will then request the gmail api with the emailId and get its whole body.
+      the body is divided into parts , like header , html , main body , subject , attachment
+      Here we will get the attachment id of that email
+
+    2. Now we have attachmentId of email , we will then again request the gmail api with attachmentId 
+       and the email id of the attachment. we will fetch the attachment text.
+       This text is in base64 format , we will convert this into binary using nodejs buffer function.
+       then we will convert this binary data into text using pdf-parse library.
+
+    3. After this we will have a nested array of objects with attachment text of different emails.
+       we will convert this into a single array.
+    
+    4. Now we will pass this whole text to mistralai/Mixtral-8x7B-Instruct-v0.1 using hugging face inference api.
+       I have given such system prompt to this ai model , that it will return me service name , renewal date , amount , frequency of each subscription data 
+       and then return the data in a specific format.
+    */
+
+    
     const emailAttachments = await Promise.all(
+      // fetch each email body
       emails.map(async (email:any) => {
         const messageDetails = await gmail.users.messages.get({
           userId: "me",
@@ -130,8 +144,9 @@ const getSubscriptionsData = asyncHandler (async (req:Request , res:Response)=>{
 
         const parts = messageDetails.data.payload?.parts || [];
 
-        // Extract attachments from email parts
+        // Extract attachments text
         const attachments = await Promise.all(
+          // fetch attachment text for each attachmentId
           parts
             .filter((part) => part.body?.attachmentId)
             .map(async (attachment:any) => {
@@ -161,26 +176,17 @@ const getSubscriptionsData = asyncHandler (async (req:Request , res:Response)=>{
         } 
       })
     )
-    console.log("email attachments" , emailAttachments)
     
     // converting nested array pdf text into plain array to pass to ai model
     const allTexts = emailAttachments.flatMap((email) => email.attachments).map((attachment) => attachment.pdfText.text);
     const combinedText = allTexts.join("\n\n"); // Combine all extracted text with a separator
 
+    console.log("combined text" , combinedText)
+
     // passing the extracted subscription data to ai model , to get desired output
-    const client = new HfInference(process.env.HUGGING_API_KEY)
-    const subscriptionsData = await client.chatCompletion({
-      model: "mistralai/Mixtral-8x7B-Instruct-v0.1",
-      messages: [
-        { role: "system", content: "You are an AI assistant tasked with extracting subscription details from text. For each entry, extract the following information:\\n\\nservice: The name of the service or subscription.\\namount: The billing amount (e.g., $20.99).\\nrenewalDate: The next payment or renewal date.\\nfrequency: Determine the frequency of the subscription:\\nIf the same service name appears every month, label it as \\\"monthly.\\\"\\nIf the service appears less frequently, label it as \\\"yearly.\\\"\\nFor other patterns (e.g., every 3 months), label the frequency accordingly.\\nRules:\\n\\nOnly include unique service entries:\\nDo not include services with the same name more than once in the same month.\\nTo determine the frequency, analyze all occurrences of the same service name and calculate how often they appear across the data.\nOutput Format:\n      [\n        {\n          \"service\": \"<name>\",\n          \"amount\": \"<amount>\",\n          \"renewalDate\": \"<date>\",\n          \"frequency\": \"<frequency>\"\n        }\n      ]. \\n You will give me just the output I need , no extra text attached." },
-        { role: "user", content: combinedText }
-      ],
-      temperature: 0.5,
-      max_tokens: 5000,
-      top_p: 0.7
-    })
-    console.log(subscriptionsData.choices[0].message.content)
-    const subscriptionsArray = JSON.parse(subscriptionsData.choices[0].message.content!);
+    const subscriptions = await extractSubscriptionDetails(combinedText)
+
+    console.log("subscriptions" , subscriptions)
 
     // delete previous subscriptions
     await prisma.subscription.deleteMany({
@@ -188,25 +194,28 @@ const getSubscriptionsData = asyncHandler (async (req:Request , res:Response)=>{
         authorId: userId
       }
     })
+    console.log("deleted in db")
 
     // saving in db
     await Promise.all(
-      subscriptionsArray!.map(async (subscription:any)=> await prisma.subscription.create({
+      subscriptions!.map(async (subscription:any)=> await prisma.subscription.create({
         data:{
           service:subscription.service,
           amount: subscription.amount,
           frequency:subscription.frequency,
-          renewalDate:subscription.renewalDate,
+          lastRenewalDate:subscription.lastRenewalDate,
           authorId:userId
         }
       }))
     )
 
+    console.log("saved in db")
+
     return res.status(200).json(
-      new ApiResponse(200 , subscriptionsData?.choices[0]?.message?.content , "Subscriptions Data fetched successfully")
-    );
+      new ApiResponse(200 , subscriptions , "Subscriptions Data fetched successfully")
+    )
   } catch (error:any){
-    throw new ApiError (500 ,  error)
+    throw new ApiError(500 , "Something went wrong while fetching subscriptions " , error)
   }
 })
 
@@ -236,6 +245,9 @@ const getUserDetails = asyncHandler (async (req:Request , res:Response)=>{
       new ApiResponse(200 , user , "User Data fetched successfully")
     )
   } catch (error:any) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json(new ApiResponse(400, error.errors, "Validation error"))
+    }
     return res.status(500).json(
       new ApiResponse(500 , "Something went wrong while fetching user details" , error)
     )
@@ -256,10 +268,13 @@ const deleteSubscription = asyncHandler (async (req:Request , res:Response)=>{
       new ApiResponse(200 , "Subscription deleted successfully")
     )
   } catch (error:any) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json(new ApiResponse(400, error.errors, "Validation error"))
+    }
     throw new ApiError(500 , "Something went wrong " , error)
   }
 })
 
-export {googleAuth , googleLogin , getSubscriptionsData , getUserDetails , deleteSubscription}
+export {googleAuth , googleLogin , getSubscriptions , getUserDetails , deleteSubscription}
 
 // mistralai/Mixtral-8x7B-Instruct-v0.1
