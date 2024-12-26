@@ -275,6 +275,28 @@ const deleteSubscription = asyncHandler (async (req:Request , res:Response)=>{
   }
 })
 
-export {googleAuth , googleLogin , getSubscriptions , getUserDetails , deleteSubscription}
+const triggerNotification = asyncHandler (async (req:Request , res:Response)=>{
+  try {
+    const {subscriptionId} = uuidSchema.parse({userId:req.body.subscriptionId})
+    await prisma.subscription.update({
+      where:{
+        id:subscriptionId
+      },
+      data:{
+        isNotification:true
+      }
+    })
+    return res.status(200).json(
+      new ApiResponse(200 , "Notification setup successfull")
+    )
+  } catch (error:any) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json(new ApiResponse(400, error.errors, "Validation error"))
+    }
+    throw new ApiError(500 ,"Something went wrong while setting up notification", error)
+  }
+})
+
+export {googleAuth , googleLogin , getSubscriptions , getUserDetails , deleteSubscription , triggerNotification}
 
 // mistralai/Mixtral-8x7B-Instruct-v0.1
