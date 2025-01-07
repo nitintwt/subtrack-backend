@@ -1,6 +1,15 @@
-import { prisma } from "../db"
+import { prisma } from "../db/connect.js"
 
-const notifyUsers = async () => {
+export const notifyUsers = async (id:string) => {
+  try {
+    const subscription = await prisma.subscription.findFirst({
+      where:{
+        id:id
+      }
+    })
+  } catch (error) {
+    console.error("Something went wrong while sending reminder")
+  }
 
 };
 /*

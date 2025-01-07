@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { deleteSubscription, getSubscriptions, getUserDetails, googleAuth, googleLogin, triggerNotification } from "../controllers/user.controller";
+import { deleteSubscription, getSubscriptions, getUserDetails, googleAuth, googleLogin, triggerNotification } from "../controllers/user.controller.js";
 
 const userRouter = Router()
 

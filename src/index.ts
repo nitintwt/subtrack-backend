@@ -1,8 +1,9 @@
 import express from 'express'
-import connectDb from './db'
-import { app } from './app'
+import connectDb from './db/connect.js'
+import { app } from './app.js'
 import pg from 'pg'
 import fs from "fs"
+import { notifyUsers } from './controllers/notify.controller.js'
 
 connectDb()
 .then(()=>{
@@ -11,7 +12,7 @@ connectDb()
   })
 })
 
-
+// connection with pg_notify channel to get subscription id which has renewal date after 3 days 
 const config = {
   user: "avnadmin",
   password:process.env.AIVEN_PASSWORD ,
@@ -31,5 +32,6 @@ client.query('LISTEN send_notification');
 client.on("notification" , async (msg)=>{
   if(msg.channel ==="send_notification"){
     console.log(`Received subscription id ${msg.payload}`)
+    notifyUsers(msg.payload!)
   }
 })

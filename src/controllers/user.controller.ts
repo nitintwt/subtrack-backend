@@ -1,12 +1,12 @@
 import { google } from "googleapis";
-import { asyncHandler } from "../utils/asyncHandler";
-import { prisma } from "../db";
-import { ApiResponse } from "../utils/ApiResponse";
-import { ApiError } from "../utils/ApiError";
+import { asyncHandler } from "../utils/asyncHandler.js";
+import { prisma } from "../db/connect.js";
+import { ApiResponse } from "../utils/ApiResponse.js";
+import { ApiError } from "../utils/ApiError.js";
 import { Request, Response } from "express";
 import PdfParse from "pdf-parse";
 import { z } from "zod";
-import { extractSubscriptionDetails } from "../services/ai.service";
+import { extractSubscriptionDetails } from "../services/ai.service.js";
 
 const uuidSchema = z.object({
   userId: z.string().uuid(),
