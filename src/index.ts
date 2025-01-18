@@ -13,7 +13,7 @@ connectDb()
 })
 
 // connection with pg_notify channel to get subscription id which has renewal date after 3 days 
-const config = {
+/*const config = {
   user: "avnadmin",
   password:process.env.AIVEN_PASSWORD ,
   host:process.env.AIVEN_HOST ,
@@ -34,4 +34,4 @@ client.on("notification" , async (msg)=>{
     console.log(`Received subscription id ${msg.payload}`)
     notifyUsers(msg.payload!)
   }
-})
+})*/

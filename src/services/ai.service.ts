@@ -12,6 +12,7 @@ export const extractSubscriptionDetails = async (text: string) => {
     - If the same service name appears every month, label it as "monthly."
     - If the service appears less frequently, label it as "yearly."
     - For other patterns (e.g., every 3 months), label the frequency accordingly.
+  5. **category**: Determine the category of the service according to your knowledge. Value should be either Productivity or Entertainment.
 
   ### Rules:
   - Only include unique service entries:
@@ -25,7 +26,8 @@ export const extractSubscriptionDetails = async (text: string) => {
       "service": "<name>",
       "amount": "<amount>",
       "lastRenewalDate": "<date>",
-      "frequency": "<frequency>"
+      "frequency": "<frequency>",
+      "category":"<category>"
     }
   ]
 

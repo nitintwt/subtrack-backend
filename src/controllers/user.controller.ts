@@ -2,7 +2,6 @@ import { google } from "googleapis";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { prisma } from "../db/connect.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
-import { ApiError } from "../utils/ApiError.js";
 import { Request, Response } from "express";
 import PdfParse from "pdf-parse";
 import { z } from "zod";
@@ -57,8 +56,7 @@ const googleLogin = asyncHandler(async (req:Request , res:Response)=>{
    .json(new ApiResponse (200 , 'Login successfull!!'))
   } catch (error:any) {
     console.error(error)
-   throw new ApiError(500 , "Something went wrong. Try login again" , error)
-   
+    return res.status(500).json({message:"Something went wrong. Try again"})
   }
 })
 
@@ -204,7 +202,8 @@ const getSubscriptions = asyncHandler (async (req:Request , res:Response)=>{
           amount: subscription.amount,
           frequency:subscription.frequency,
           lastRenewalDate:subscription.lastRenewalDate,
-          authorId:userId
+          authorId:userId,
+          category:subscription.category
         }
       }))
     )
@@ -215,8 +214,9 @@ const getSubscriptions = asyncHandler (async (req:Request , res:Response)=>{
       new ApiResponse(200 , subscriptions , "Subscriptions Data fetched successfully")
     )
   } catch (error:any){
-    throw new ApiError(500 , "Something went wrong while fetching subscriptions " , error)
-  }
+    console.error("Something went wrong while fetching subscriptions:" , error)
+    return res.status(500).json({message:"Something went wrong while fetching subscriptions"})
+    }
 })
 
 const getUserDetails = asyncHandler (async (req:Request , res:Response)=>{
@@ -245,12 +245,7 @@ const getUserDetails = asyncHandler (async (req:Request , res:Response)=>{
       new ApiResponse(200 , user , "User Data fetched successfully")
     )
   } catch (error:any) {
-    if (error instanceof z.ZodError) {
-      return res.status(400).json(new ApiResponse(400, error.errors, "Validation error"))
-    }
-    return res.status(500).json(
-      new ApiResponse(500 , "Something went wrong while fetching user details" , error)
-    )
+    return res.status(500).json({message:"Something went wrong while fetching user details"})
   }
 })
 
@@ -271,7 +266,7 @@ const deleteSubscription = asyncHandler (async (req:Request , res:Response)=>{
     if (error instanceof z.ZodError) {
       return res.status(400).json(new ApiResponse(400, error.errors, "Validation error"))
     }
-    throw new ApiError(500 , "Something went wrong " , error)
+    return res.status(500).json({message:"Something went wrong"})
   }
 })
 
@@ -293,7 +288,7 @@ const triggerNotification = asyncHandler (async (req:Request , res:Response)=>{
     if (error instanceof z.ZodError) {
       return res.status(400).json(new ApiResponse(400, error.errors, "Validation error"))
     }
-    throw new ApiError(500 ,"Something went wrong while setting up notification", error)
+    return res.status(500).json({message:"Something went wrong.Try again"})
   }
 })
 

@@ -5,9 +5,9 @@ const userRouter = Router()
 
 userRouter.route("/googleOAuth").get(googleAuth)
 userRouter.route("/googleLogin").post(googleLogin)
-userRouter.route("/subscriptionsData").get(getSubscriptions)
+userRouter.route("/subscriptions").get(getSubscriptions)
 userRouter.route("/userDetails").get(getUserDetails)
-userRouter.route("/deleteSubscription").delete(deleteSubscription)
+userRouter.route("/subscription").delete(deleteSubscription)
 userRouter.route("/notification").post(triggerNotification)
 
 export default userRouter

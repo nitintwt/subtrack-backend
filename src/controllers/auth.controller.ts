@@ -1,5 +1,4 @@
 import { prisma } from "../db/connect.js";
-import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { Request, Response } from "express";
@@ -7,19 +6,37 @@ import bcrypt from 'bcrypt'
 import jwt from 'jsonwebtoken'
 import { z } from "zod";
 
-const signupSchema = z.object({
-  name:z.string(),
-  email: z.string().email(),
-  password: z.string().min(8)
+const registerSchema = z.object({
+  name: z
+    .string()
+    .trim()
+    .min(5 , "Name must be at least 5 characters long")
+    .max(30 , "Name must be at most 30 characters long")
+    .regex(/^[a-zA-Z\s\-']+$/, "Name can only contain letters, spaces, hyphens, and apostrophes"),
+  email: z
+    .string()
+    .trim()
+    .email("Invalid email format"),
+  password: z
+    .string()
+    .trim()
+    .min(8 , "Password must be at least 8 characters long")
+    .max(20 , "Password must be at most 20 characters long")
 })
 
 const loginSchema = z.object({
-  email:z.string().email(),
-  password: z.string().min(8)
+  email: z
+    .string()
+    .trim()
+    .email("Invalid email format"),
+  password: z
+    .string()
+    .trim()
+    .min(8 , "Password must be at least 8 characters long")
+    .max(20 , "Password must be at most 20 characters long")
 })
 
 const generateAccessAndRefreshToken = async (userId:string , email:string , name:string)=>{
-  try {
     const accessToken = jwt.sign(
       {
       id:userId,
@@ -42,14 +59,19 @@ const generateAccessAndRefreshToken = async (userId:string , email:string , name
       }
     )
     return {accessToken , refreshToken}
-  } catch (error:any) {
-    throw new ApiError(500 , "Something went wrong while creating access token" , error)
-  }
 }
 
 const registerUser = asyncHandler(async (req: Request, res: Response) => {
   try {
-    const { name, email, password } = signupSchema.parse(req.body)
+    const parseResult = registerSchema.safeParse(req.body)
+
+    if (!parseResult.success) {
+      return res.status(409).json(
+        {message: parseResult.error.issues[0].message }
+      )
+    }
+  
+    const {name , email , password}= parseResult.data
 
     const existedUser = await prisma.user.findFirst({
       where: {
@@ -57,9 +79,9 @@ const registerUser = asyncHandler(async (req: Request, res: Response) => {
       }
     })
 
-    if (existedUser) {
+    if(existedUser){
       return res.status(409).json(
-        new ApiResponse(409, "User with this email already exists.")
+        {message: "User with this email already exists"}
       )
     }
 
@@ -77,17 +99,24 @@ const registerUser = asyncHandler(async (req: Request, res: Response) => {
       new ApiResponse(201, "User registered successfully.")
     )
   } catch (error: any) {
-    if (error instanceof z.ZodError) {
-      return res.status(400).json(new ApiResponse(400, error.errors, "Validation error"))
-    }
-    console.error("Error registering user:", error)
-    throw new ApiError(500, "Something went wrong registering the user.", error)
+    console.error("Register error" , error)
+    return res.status(500).json(
+      {message: error.message}
+    )
   }
 })
 
 const loginUser = asyncHandler(async (req: Request, res: Response) => {
   try {
-    const { email, password } = loginSchema.parse(req.body)
+    const parseResult = loginSchema.safeParse(req.body)
+
+    if (!parseResult.success) {
+      return res.status(409).json(
+        {message: parseResult.error.issues[0].message }
+      )
+    }
+  
+    const {email , password}= parseResult.data
 
     const user = await prisma.user.findFirst({
       where: {
@@ -97,7 +126,7 @@ const loginUser = asyncHandler(async (req: Request, res: Response) => {
 
     if (!user) {
       return res.status(404).json(
-        new ApiResponse(404, null, "User with this email does not exist")
+        {message: "User doesn't exist" }
       )
     }
 
@@ -105,7 +134,7 @@ const loginUser = asyncHandler(async (req: Request, res: Response) => {
 
     if (!isPasswordCorrect) {
       return res.status(401).json(
-        new ApiResponse(401, null, "Incorrect password.")
+        {message: "Password is incorrect" }
       )
     }
 
@@ -135,11 +164,10 @@ const loginUser = asyncHandler(async (req: Request, res: Response) => {
       .cookie("refreshToken", refreshToken, options)
       .json(new ApiResponse(200, user, "User logged in successfully."))
   } catch (error: any) {
-    if (error instanceof z.ZodError) {
-      return res.status(400).json(new ApiResponse(400, error.errors, "Validation error."))
-    }
-    console.error("Error logging in user:", error)
-    throw new ApiError(500, "Something went wrong logging in the user.", error)
+    console.error("Login error" , error)
+    return res.status(500).json(
+      {message: error.message}
+    )
   }
 })
 
@@ -167,7 +195,10 @@ const logoutUser = asyncHandler(async(req:Request , res:Response)=>{
       new ApiResponse(200 , "User logged out successfully")
     )
   } catch (error:any) {
-    throw new ApiError(500 , "Something went wrong" , error)
+    console.error("Logout error" , error)
+    return res.status(500).json(
+      {message:error.message}
+    )
   }
 })
 

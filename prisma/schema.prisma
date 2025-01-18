@@ -29,5 +29,6 @@ model Subscription {
   frequency String
   lastRenewalDate String?
   isNotification Boolean @default(false)
+  category String? @default("nan")
   @@index([authorId])
 }
