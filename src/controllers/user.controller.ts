@@ -8,7 +8,7 @@ import { z } from "zod";
 import { extractSubscriptionDetails } from "../services/ai.service.js";
 
 const uuidSchema = z.object({
-  userId: z.string().uuid(),
+  userId: z.string().uuid().optional(),
   subscriptionId: z.string().uuid().optional()
 })
 
@@ -270,9 +270,10 @@ const deleteSubscription = asyncHandler (async (req:Request , res:Response)=>{
   }
 })
 
-const triggerNotification = asyncHandler (async (req:Request , res:Response)=>{
+const startNotification = asyncHandler (async (req:Request , res:Response)=>{
   try {
-    const {subscriptionId} = uuidSchema.parse({userId:req.body.subscriptionId})
+    const {subscriptionId} = uuidSchema.parse({subscriptionId:req.body.subscriptionId})
+
     await prisma.subscription.update({
       where:{
         id:subscriptionId
@@ -281,6 +282,7 @@ const triggerNotification = asyncHandler (async (req:Request , res:Response)=>{
         isNotification:true
       }
     })
+    // todo:- push notify job to a kafka queue
     return res.status(200).json(
       new ApiResponse(200 , "Notification setup successfull")
     )
@@ -292,6 +294,26 @@ const triggerNotification = asyncHandler (async (req:Request , res:Response)=>{
   }
 })
 
-export {googleAuth , googleLogin , getSubscriptions , getUserDetails , deleteSubscription , triggerNotification}
+const stopNotification = asyncHandler(async (req:Request , res:Response)=>{
+  try {
+    const {subscriptionId}= uuidSchema.parse({subscriptionId:req.body.subscriptionId})
+
+    await prisma.subscription.update({
+      where:{
+        id:subscriptionId
+      },
+      data:{
+        isNotification:false
+      }
+    })
+    return res.status(200).json({message:"Your notification service has been stopped"})
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json(new ApiResponse(400, error.errors, "Validation error"))
+    }
+    return res.status(500).json({message:"Something went wrong.Try again"})
+  }
+})
+export {googleAuth , googleLogin , getSubscriptions , getUserDetails , deleteSubscription , startNotification , stopNotification}
 
 // mistralai/Mixtral-8x7B-Instruct-v0.1
