@@ -3,7 +3,7 @@ import connectDb from './db/connect.js'
 import { app } from './app.js'
 import pg from 'pg'
 import fs from "fs"
-import { notifyUsers } from './controllers/notify.controller.js'
+import sendNotfication from './services/sendNotification.service.js'
 
 connectDb()
 .then(()=>{
@@ -13,10 +13,10 @@ connectDb()
 })
 
 // connection with pg_notify channel to get subscription id which has renewal date after 3 days 
-/*const config = {
+const config = {
   user: "avnadmin",
-  password:process.env.AIVEN_PASSWORD ,
-  host:process.env.AIVEN_HOST ,
+  password:process.env.AIVEN_PG_PASSWORD ,
+  host:process.env.AIVEN_PG_HOST ,
   port: 26644,
   database: "defaultdb",
   ssl: {
@@ -31,7 +31,6 @@ client.connect()
 client.query('LISTEN send_notification');
 client.on("notification" , async (msg)=>{
   if(msg.channel ==="send_notification"){
-    console.log(`Received subscription id ${msg.payload}`)
-    notifyUsers(msg.payload!)
+    sendNotfication({subscriptionId:msg.payload})
   }
-})*/
+})

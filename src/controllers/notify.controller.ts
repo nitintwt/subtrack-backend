@@ -38,6 +38,7 @@ BEGIN
       ) = CURRENT_DATE + INTERVAL '3 days'
   LOOP
     -- Use pg_notify to send subscription ID
+	RAISE NOTICE 'Found matching subscription: %', subscription.id;
     PERFORM pg_notify('send_notification', subscription.id::text);
   END LOOP;
 END;
@@ -48,19 +49,16 @@ SELECT notify_backend();
 SELECT cron.schedule(
   'daily_subscription_check',  -- Job name
   '0 8 * * *',                 -- Cron schedule: 8 AM daily
-  $$ CALL notify_backend(); $$ -- SQL command to execute
+  $$ SELECT notify_backend(); $$ -- SQL command to execute
 );
 
 SELECT * FROM cron.job;
-
-SELECT jobid, schedule, command 
-FROM cron.job;
 
 SELECT cron.alter_job(1, schedule => '39 21 * * *');
 
 */
 
-const emailWorker = new Worker("bull:subtrack-email-queue", async(job)=>{
+const emailWorker = new Worker("subtrack-email-queue", async(job)=>{
   const data = job.data
   console.log("Job" , data)
   try {

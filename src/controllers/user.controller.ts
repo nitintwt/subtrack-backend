@@ -4,22 +4,12 @@ import { prisma } from "../db/connect.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import { Request, Response } from "express";
 import PdfParse from "pdf-parse";
-import { z } from "zod";
+import { string, z } from "zod";
 import { extractSubscriptionDetails } from "../services/ai.service.js";
-import {Queue, tryCatch} from "bullmq"
 
 const uuidSchema = z.object({
   userId: z.string().uuid().optional(),
   subscriptionId: z.string().uuid().optional()
-})
-
-const emailQueue = new Queue("subtrack-email-queue" , {
-  connection: {
-    host:process.env.AIVEN_HOST,
-    port:26644,
-    username:process.env.AIVEN_USERNAME,
-    password:process.env.AIVEN_PASSWORD ,
-  },
 })
 
 // generated a endpoint for the google oauth2 and redirect user to it for authentication
@@ -116,7 +106,6 @@ const getSubscriptions = asyncHandler (async (req:Request , res:Response)=>{
     if (!emails || emails.length === 0) {
       return res.status(200).json({ message: "No emails found" });
     }
-    console.log("EMAIL" , emails)
 
     /*
     The above "emails" is an array of email ids which has invoice or receipt in there subject.
@@ -189,12 +178,12 @@ const getSubscriptions = asyncHandler (async (req:Request , res:Response)=>{
     const allTexts = emailAttachments.flatMap((email) => email.attachments).map((attachment) => attachment.pdfText.text);
     const combinedText = allTexts.join("\n\n"); // Combine all extracted text with a separator
 
-    console.log("combined text" , combinedText)
+    //console.log("combined text" , combinedText)
 
     // passing the extracted subscription data to ai model , to get desired output
     const subscriptions = await extractSubscriptionDetails(combinedText)
 
-    console.log("subscriptions" , subscriptions)
+    //console.log("subscriptions" , subscriptions)
 
     // delete previous subscriptions
     await prisma.subscription.deleteMany({
@@ -325,28 +314,6 @@ const stopNotification = asyncHandler(async (req:Request , res:Response)=>{
   }
 })
 
-const sendNotfication = asyncHandler (async (req:Request , res:Response)=>{
-  const {subscriptionId}= req.body
-  try {
-    const subscription = await prisma.subscription.findFirst({
-      where:{
-        id:subscriptionId
-      },
-      include:{
-        author:true
-      }
-    })
-
-    const job =await emailQueue.add(`${subscription.author.email}`, {email:subscription.author.email , name:subscription.author.name , service:subscription.service , amount:subscription.amount})
-    console.log("job",job)
-    return res.status(200).json(
-      new ApiResponse(200 , "Email sent successfully")
-    )
-  } catch (error) {
-    console.log("Something went wrong while sending email" , error)
-  }
-})
-
-export {googleAuth , googleLogin , getSubscriptions , getUserDetails , deleteSubscription , startNotification , stopNotification , sendNotfication}
+export {googleAuth , googleLogin , getSubscriptions , getUserDetails , deleteSubscription , startNotification , stopNotification}
 
 // mistralai/Mixtral-8x7B-Instruct-v0.1
