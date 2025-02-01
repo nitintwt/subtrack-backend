@@ -6,10 +6,20 @@ import { Request, Response } from "express";
 import PdfParse from "pdf-parse";
 import { z } from "zod";
 import { extractSubscriptionDetails } from "../services/ai.service.js";
+import {Queue, tryCatch} from "bullmq"
 
 const uuidSchema = z.object({
   userId: z.string().uuid().optional(),
   subscriptionId: z.string().uuid().optional()
+})
+
+const emailQueue = new Queue("subtrack-email-queue" , {
+  connection: {
+    host:process.env.AIVEN_HOST,
+    port:26644,
+    username:process.env.AIVEN_USERNAME,
+    password:process.env.AIVEN_PASSWORD ,
+  },
 })
 
 // generated a endpoint for the google oauth2 and redirect user to it for authentication
@@ -314,6 +324,29 @@ const stopNotification = asyncHandler(async (req:Request , res:Response)=>{
     return res.status(500).json({message:"Something went wrong.Try again"})
   }
 })
-export {googleAuth , googleLogin , getSubscriptions , getUserDetails , deleteSubscription , startNotification , stopNotification}
+
+const sendNotfication = asyncHandler (async (req:Request , res:Response)=>{
+  const {subscriptionId}= req.body
+  try {
+    const subscription = await prisma.subscription.findFirst({
+      where:{
+        id:subscriptionId
+      },
+      include:{
+        author:true
+      }
+    })
+
+    const job =await emailQueue.add(`${subscription.author.email}`, {email:subscription.author.email , name:subscription.author.name , service:subscription.service , amount:subscription.amount})
+    console.log("job",job)
+    return res.status(200).json(
+      new ApiResponse(200 , "Email sent successfully")
+    )
+  } catch (error) {
+    console.log("Something went wrong while sending email" , error)
+  }
+})
+
+export {googleAuth , googleLogin , getSubscriptions , getUserDetails , deleteSubscription , startNotification , stopNotification , sendNotfication}
 
 // mistralai/Mixtral-8x7B-Instruct-v0.1

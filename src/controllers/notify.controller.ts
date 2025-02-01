@@ -1,4 +1,7 @@
+import { tryCatch, Worker } from "bullmq";
 import { prisma } from "../db/connect.js"
+import nodemailer from 'nodemailer';
+import dotenv from 'dotenv'
 
 export const notifyUsers = async (id:string) => {
   try {
@@ -56,3 +59,44 @@ FROM cron.job;
 SELECT cron.alter_job(1, schedule => '39 21 * * *');
 
 */
+
+const emailWorker = new Worker("bull:subtrack-email-queue", async(job)=>{
+  const data = job.data
+  console.log("Job" , data)
+  try {
+    const transporter = nodemailer.createTransport({
+      service: "gmail",
+      auth: {
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASS,
+      }
+    })
+
+    const mailConfigs = {
+      from: process.env.EMAIL_USER,
+      to: "ns809203@gmail.com",
+      subject: `Renewal of your ${data.service} subscription`,
+      text: 
+      `Hello ${data.name},
+      We hope that you are doing well! This is a friendly reminder that your subscription , ${data.service}, is set to renew in days.
+       ${data.amount} will be deducted from your account.
+      `
+    }
+    await transporter.sendMail(mailConfigs)
+  } catch (error) {
+    console.error(`Error in Job ID ${job.id}:`, error)
+  }
+},{
+  connection:{
+    host:process.env.AIVEN_HOST,
+    port:26644,
+    username:process.env.AIVEN_USERNAME,
+    password:process.env.AIVEN_PASSWORD ,
+  },
+  limiter: {
+    max: 50,
+    duration: 10 * 1000
+  }
+})
+
+export{emailWorker}
