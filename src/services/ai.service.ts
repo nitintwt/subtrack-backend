@@ -1,7 +1,14 @@
-import { HfInference } from "@huggingface/inference";
+import {OpenAI} from "openai"
+import dotenv from "dotenv";
+
+dotenv.config({ path: "./.env" });
+
+const client = new OpenAI({
+  baseURL: "https://api.groq.com/openai/v1",
+  apiKey: process.env.GROQ_API_KEY,
+})
 
 export const extractSubscriptionDetails = async (text: string) => {
-  const client = new HfInference(process.env.HUGGING_API_KEY)
   const prompt = `
   You are an AI assistant tasked with extracting subscription details from text. For each entry, extract the following information with correct format told:
 
@@ -41,14 +48,12 @@ export const extractSubscriptionDetails = async (text: string) => {
 
 
   `;
-  const response = await client.chatCompletion({
-    model: "mistralai/Mixtral-8x7B-Instruct-v0.1",
+  const response = await client.chat.completions.create({
+    model: "llama3-70b-8192",
     messages: [
       { role: "system", content: prompt },
       { role: "user", content: text },
     ],
-    temperature: 0.5,
-    max_tokens: 5000,
   })
   return JSON.parse(response.choices[0].message.content!)
 }
