@@ -26,7 +26,7 @@ model Subscription {
   author User @relation(fields: [authorId], references: [id])    // field specifies that authorId is used to establish the relation and refrence points to the id field of the User model
   service String
   amount String
-  frequency String
+  frequency String @default("monthly")
   lastRenewalDate String?
   isNotification Boolean @default(false)
   category String? @default("nan")
